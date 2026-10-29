@@ -19,7 +19,9 @@ log = logging.getLogger("aa")
 CONNECTION = ["AA/Connection/reconnect", "AA/Connection/title", "AA/Connection/idle-278"]
 RESULT_WIN = ["AA/victory"]
 RESULT_LOSE = ["AA/defeat"]
-NEXT = ["AA/next-level", "AA/next-room", "AA/reward-continue", "AA/replay", "AA/retry"]
+# result screens: Next -> Return to lobby / Pick Next Portal
+NEXT = ["AA/result-next", "AA/next-level", "AA/next-room", "AA/reward-continue",
+        "AA/replay", "AA/retry", "AA/return-to-lobby"]
 UPGRADES = [f"AA/upgrade-{i}" for i in range(5)] + ["AA/upgrade-max-button"]
 
 
@@ -51,11 +53,14 @@ class Game:
 
     # ---- phases --------------------------------------------------------
     def start_run(self):
-        """From lobby: select mode entry and start the match."""
-        # vote/start button appears on the mode select screen
-        if self._click_match("AA/vote-start", delay=1.0):
-            time.sleep(self.cfg.getint("Delays", "StageClickDelay") / 1000)
-            return True
+        """From lobby: join a portal, then vote Yes to start."""
+        # portal join prompt / start button in the portal lobby
+        for name in ("AA/portal-start", "AA/vote-start"):
+            if self._click_match(name, delay=1.0):
+                time.sleep(self.cfg.getint("Delays", "StageClickDelay") / 1000)
+                # confirm the vote
+                self._click_match("AA/vote-yes", delay=1.0)
+                return True
         return False
 
     def in_game(self):
@@ -94,6 +99,12 @@ class Game:
                 break
             time.sleep(0.5)
 
+    def close_overlays(self):
+        """The chat overlay blocks clicks on game buttons. Toggle it closed via
+        the topbar chat bubble (game-area-relative position, calibrated)."""
+        ox, oy = self.vision._offset
+        self.input.click(ox + 139, oy + 34, delay_after=0.5)
+
     # ---- main loop -----------------------------------------------------
     def run_forever(self):
         self.running = True
@@ -103,6 +114,7 @@ class Game:
                 time.sleep(0.5)
                 continue
             try:
+                self.close_overlays()
                 if self._handle_connection():
                     continue
                 result = self.handle_result()
