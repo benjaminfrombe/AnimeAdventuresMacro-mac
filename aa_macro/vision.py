@@ -31,27 +31,32 @@ class Vision:
         self.ref_w = cfg.getint("Macro", "ReferenceWidth")
         self.ref_h = cfg.getint("Macro", "ReferenceHeight")
         self.confidence = cfg.getfloat("Macro", "Confidence")
+        self.scale = cfg.getfloat("Macro", "ScaleFactor")
+        self.monitor = cfg.getint("Macro", "MonitorIndex")
+        self.crop = {k: cfg.getint("Macro", f"Crop{k}") for k in ("X", "Y", "W", "H")}
         self._templates: dict[str, np.ndarray] = {}
+        self._offset = (0, 0)  # crop origin in screen coords
 
     # ---- capture -------------------------------------------------------
     def grab_gray(self) -> np.ndarray:
-        with mss.mss() as sct:
-            mon = sct.monitors[0]  # full virtual screen
-            frame = np.array(sct.grab(mon))
-        bgr = frame[:, :, :3]
-        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        # Retina: physical pixels = 2x logical. Normalize to logical size.
-        h, w = gray.shape
-        if h > 1440:  # crude but effective Retina heuristic; calibrated later
-            gray = cv2.resize(gray, (w // 2, h // 2), interpolation=cv2.INTER_AREA)
+        with mss.MSS() as sct:
+            mon = sct.monitors[self.monitor]
+            region = {
+                "left": mon["left"] + self.crop["X"],
+                "top": mon["top"] + self.crop["Y"],
+                "width": self.crop["W"],
+                "height": self.crop["H"],
+            }
+            self._offset = (region["left"], region["top"])
+            frame = np.array(sct.grab(region))
+        gray = cv2.cvtColor(frame[:, :, :3], cv2.COLOR_BGR2GRAY)
         self._last_logical = gray
         return gray
 
     def _scale_for(self, gray: np.ndarray) -> float:
-        """Scale factor mapping reference-resolution templates onto this capture."""
-        h, w = gray.shape
-        # The game window is assumed to fill the screen; scale by height.
-        return h / self.ref_h
+        """Fixed scale factor (calibrated); templates were captured on Windows at
+        a UI size ~1/0.90 of this game area."""
+        return self.scale
 
     # ---- templates -----------------------------------------------------
     def template(self, name: str) -> np.ndarray:
@@ -77,9 +82,10 @@ class Vision:
         _, max_val, _, max_loc = cv2.minMaxLoc(res)
         if max_val < conf:
             return None
-        # max_loc is in logical-capture coords; screen coords == logical coords
-        return Match(name=name, x=max_loc[0] + scaled.shape[1] // 2,
-                     y=max_loc[1] + scaled.shape[0] // 2, score=float(max_val))
+        # crop-relative -> global screen coords
+        gx = self._offset[0] + max_loc[0] + scaled.shape[1] // 2
+        gy = self._offset[1] + max_loc[1] + scaled.shape[0] // 2
+        return Match(name=name, x=gx, y=gy, score=float(max_val))
 
     def wait_for(self, name: str, timeout: float = 15.0, interval: float = 0.3) -> Match | None:
         deadline = time.time() + timeout

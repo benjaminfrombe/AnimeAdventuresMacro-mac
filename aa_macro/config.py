@@ -26,6 +26,9 @@ DEFAULTS = {
         "ReferenceWidth": "1280",   # resolution the templates were captured at
         "ReferenceHeight": "720",
         "Confidence": "0.82",
+        "ScaleFactor": "0.90",      # calibrated on a 998x658 game area (2026-10-29)
+        "MonitorIndex": "2",        # mss monitor holding the Roblox window
+        "CropX": "222", "CropY": "142", "CropW": "998", "CropH": "658",
         "MaxWaves": "0",            # 0 = unlimited
     },
 }
@@ -36,12 +39,12 @@ def load_config(path: Path | None = None) -> configparser.ConfigParser:
     cfg.read_dict(DEFAULTS)
     target = path or ROOT / "config.ini"
     if target.exists():
-        # original file is UTF-16LE; configparser handles str content
-        text = target.read_bytes()
-        try:
-            content = text.decode("utf-16")
-        except UnicodeDecodeError:
-            content = text.decode("utf-8", "replace")
+        # original file is UTF-16LE with BOM; our own config.ini is UTF-8
+        raw = target.read_bytes()
+        if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+            content = raw.decode("utf-16")
+        else:
+            content = raw.decode("utf-8", "replace")
         cfg.read_string(content)
     else:
         save_config(cfg, target)
