@@ -55,3 +55,10 @@ anywhere on screen, so most steps work without calibration.
 Automation violates Roblox ToS and can get your account banned. Use a throwaway
 account. The original macro's assets belong to their author; this repo is for
 personal use.
+
+## Calibrated templates (mac)
+
+`AA/portal-start.png` and `AA/vote-yes.png` were captured on macOS from the
+live game and pre-scaled by 1/0.90 so the pipeline's `ScaleFactor=0.90`
+normalizes them back. Capture new templates the same way (see
+`aa_macro/calibrate.py`).
