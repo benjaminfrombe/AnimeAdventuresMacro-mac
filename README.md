@@ -1,22 +1,34 @@
 # AnimeAdventuresMacro-mac
 
-macOS port of [Capy's AA Macro](https://github.com/capybarnia4life/AnimeAdventuresMacro)
-(v3.1, Windows / AutoHotkey). This is a clean-room reimplementation in Python:
-the original ships no source code, only a compiled `.exe`, so the game loop was
-reconstructed from the shipped detection templates and `Settings.ini`.
+**Cream's-style auto-farm macro for Roblox *Anime Adventures*, built for macOS.**
 
-**Reuses the original `Images/Detection` templates** (115 PNGs) directly —
-template matching is platform-independent.
+Inspired by [Cream's Macro for Anime Expeditions](https://github.com/Cweamy/Anime-Expeditions-Creams-Macro)
+(task queue, auto-recovery, vision-based automation, macOS support) — but for
+the right game: **Anime Adventures**. Detection templates come from
+[Capy's AA Macro](https://github.com/capybarnia4life/AnimeAdventuresMacro)
+(v3.1), reused with credit; the game logic is a clean-room reimplementation in
+Python since the original ships only a compiled Windows `.exe`.
 
-## How it works
+## Features
 
-- Screen capture with `mss`, template matching with OpenCV (`cv2.matchTemplate`).
-- Mouse/keyboard via `pynput` (clicks, keys, drag).
-- All captures and clicks are normalized to a reference resolution so the
-  original Windows templates still match on Retina / any window size.
-- State machine: lobby → portal/story select → vote start → place & upgrade
-  units → victory/defeat → replay/next → reconnect on disconnect.
-- Global hotkeys: F1 start, F2 pause, F3 stop (same as the original).
+- **Vision-based automation** — screen capture (`mss`) + OpenCV template
+  matching against 120 detection templates. No injection, no memory reading.
+- **Task queue** (`queue.json`) — queue up Portals / Story / Raids / Dungeons /
+  Infinite tasks with repeat counts; the macro works through them in order.
+- **Auto-recovery** — no recognizable screen for 90 s → backs out to the lobby
+  and retries instead of derailing an unattended session.
+- **Full run loop (live-verified)** — portal start → vote Yes → match →
+  victory/defeat → Next → Return to lobby → next run.
+- **Dungeon state machine** — room routing by priority (Rare Chest > Chest >
+  Shop > Hoard > Shrine > Boss > Curse), curse avoidance per type, shop
+  purchases by relic priority, shrine accept/deny, boss/death handling.
+- **Win/loss stats** — session + all-time counters, win rate, recent-run
+  history (`stats.json`).
+- **Discord webhooks** — optional victory/defeat embeds with mode, waves, yen
+  and session time.
+- **Global hotkeys** — F1 start, F2 pause, F3 stop (same as the original).
+- **Calibration tools** — `run.sh calibrate` shows live template matches so
+  any setup can be calibrated in minutes.
 
 ## Requirements
 
@@ -30,35 +42,48 @@ template matching is platform-independent.
 
 ```bash
 ./run.sh setup      # creates a venv and installs deps
-./run.sh            # starts the macro
-./run.sh calibrate  # helper: click in Roblox to record coordinates
+./run.sh            # starts the macro (F1 to start, F3 to stop)
+./run.sh calibrate  # live template-match viewer for calibration
 ```
 
 ## Configure
 
-Edit `config.ini` (same keys as the original `Settings.ini`, which is kept in
-`assets/reference-settings.ini`). Key sections:
+`config.ini` uses the same keys as the original `Settings.ini`
+(`assets/reference-settings.ini`), plus:
 
-- `[Server]` — private server link, public rejoin
-- `[Delays]` — scan/placement/victory delays (ms)
-- `[Webhook]` — optional Discord webhook reporting
+- `[Macro]` — mode, game-window crop (monitor + rect), scale factor, confidence
+- `[Dungeon]` — room priority, curse avoidance, shop limit/priority, shrine deny
+- `[Webhook]` — Discord webhook reporting
+
+Queue tasks live in `queue.json`:
+
+```json
+{"current": 0, "tasks": [
+  {"mode": "Portals", "repeats": 10},
+  {"mode": "Dungeons", "repeats": 3}
+]}
+```
+
+## Calibrated setup (reference)
+
+The shipped defaults were calibrated on a 2560×1440 display with the Roblox
+window at a 998×658 game area: `ScaleFactor=0.90`, `MonitorIndex=2`,
+crop `222,142,998,658`. Templates captured on macOS are pre-scaled by 1/0.90
+(see `aa_macro/calibrate.py`).
 
 ## Status
 
-Work in progress. Core vision + input + loop are implemented; the menu flow
-needs per-user calibration on first run (`run.sh calibrate`), because button
-positions depend on your Roblox window size. Detection templates are matched
-anywhere on screen, so most steps work without calibration.
+- [x] Vision + input pipeline (live-tested)
+- [x] Portal → vote → match → result → lobby loop (live-tested)
+- [x] Task queue, auto-recovery, stats, webhooks
+- [x] Dungeon state machine (needs live calibration)
+- [ ] Auto unit placement / upgrades (templates need recapture on macOS)
+- [ ] OCR reward reading (Tesseract)
+- [ ] Walk path recorder
+- [ ] Dashboard UI
 
 ## Legal / risk
 
 Automation violates Roblox ToS and can get your account banned. Use a throwaway
-account. The original macro's assets belong to their author; this repo is for
-personal use.
-
-## Calibrated templates (mac)
-
-`AA/portal-start.png` and `AA/vote-yes.png` were captured on macOS from the
-live game and pre-scaled by 1/0.90 so the pipeline's `ScaleFactor=0.90`
-normalizes them back. Capture new templates the same way (see
-`aa_macro/calibrate.py`).
+account. Original macro assets belong to their respective authors; this repo is
+for personal use.

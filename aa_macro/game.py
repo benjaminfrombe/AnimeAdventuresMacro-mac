@@ -11,7 +11,10 @@ import logging
 import time
 
 from .input import Input
+from .queue import Queue
+from .stats import Stats
 from .vision import Vision
+from .webhooks import post_run
 
 log = logging.getLogger("aa")
 
@@ -33,6 +36,9 @@ class Game:
         self.running = False
         self.paused = False
         self.runs = 0
+        self.queue = Queue.load()
+        self.stats = Stats()
+        self._last_progress = time.time()   # for auto-recovery
 
     # ---- helpers -------------------------------------------------------
     def _click_match(self, name: str, delay: float = 0.4) -> bool:
@@ -105,6 +111,17 @@ class Game:
         ox, oy = self.vision._offset
         self.input.click(ox + 139, oy + 34, delay_after=0.5)
 
+    # ---- auto-recovery (Cream's-style) ---------------------------------
+    def _stuck_check(self):
+        """No recognizable screen for too long -> back out and retry."""
+        if time.time() - self._last_progress > 90:
+            log.warning("no progress for 90s — attempting recovery")
+            self.input.press("esc", delay_after=1.0)
+            m = self.vision.find("AA/return-to-lobby")
+            if m:
+                self.input.click(m.x, m.y)
+            self._last_progress = time.time()
+
     # ---- main loop -----------------------------------------------------
     def run_forever(self):
         self.running = True
@@ -116,19 +133,32 @@ class Game:
             try:
                 self.close_overlays()
                 if self._handle_connection():
+                    self._last_progress = time.time()
                     continue
                 result = self.handle_result()
                 if result:
                     self.runs += 1
-                    log.info("run %d finished: %s", self.runs, result)
+                    self._last_progress = time.time()
+                    mode = self.cfg.get("Macro", "Mode")
+                    self.stats.record(result, mode, waves=0, yen=0)
+                    post_run(self.cfg, result=result, mode=mode, waves=0, yen=0,
+                             session_time=self.stats.session_time)
+                    log.info("run %d finished: %s (win rate %.0f%%)",
+                             self.runs, result, self.stats.win_rate * 100)
+                    task = self.queue.next_task()
+                    if task:
+                        self.queue.mark_done(task)
+                        self.cfg.set("Macro", "Mode", task.mode)
                     if max_waves and self.runs >= max_waves:
                         log.info("max runs reached (%d), stopping", max_waves)
                         self.running = False
                         break
                     continue
                 if self.start_run():
+                    self._last_progress = time.time()
                     continue
                 self.in_game()
+                self._stuck_check()
             except KeyboardInterrupt:
                 self.running = False
             except Exception:

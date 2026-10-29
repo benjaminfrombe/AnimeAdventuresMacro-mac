@@ -31,6 +31,13 @@ DEFAULTS = {
         "CropX": "222", "CropY": "142", "CropW": "998", "CropH": "658",
         "MaxWaves": "0",            # 0 = unlimited
     },
+    "Dungeon": {
+        "RoomPriority": "Rare Chest|Chest|Shop|Hoard|Shrine|Boss|Curse",
+        "AvoidCurses": "Curse of Shopping|Curse of Explosion|Curse of Health|Curse of Shielding",
+        "ShopLimit": "2",
+        "ShopPriority": "",         # empty = template order; e.g. Philosopher's Stone|Genie Lamp
+        "ShrineDeny": "",           # shrine types to deny, e.g. Chaos|Frenzy
+    },
 }
 
 
